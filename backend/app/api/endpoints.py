@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 from uuid import uuid4
@@ -24,18 +24,14 @@ router = APIRouter()
 recommender = OutfitRecommender()
 
 
-# ==========================
 # Utility: Load a PIL Image
-# ==========================
 def load_image_file(uploaded_file: UploadFile):
     uploaded_file.file.seek(0)
     contents = uploaded_file.file.read()
     return Image.open(io.BytesIO(contents)).convert("RGB")
 
 
-# ==========================
 # Request Models
-# ==========================
 class OutfitRequest(BaseModel):
     occasion: str
     season: str
@@ -46,13 +42,12 @@ class SaveOutfitRequest(BaseModel):
     season: str
 
 
-# =====================================
-# 1️⃣ Upload Wardrobe Item
-# =====================================
+# Upload Wardrobe Item
 @router.post("/wardrobe/upload")
 async def upload_wardrobe_item(
     category: str,
-    file: UploadFile = File(...)
+    file: UploadFile = File(...), 
+    conn = Depends(get_db)
 ):
     """
     1. Upload clothing item image to S3  
@@ -66,7 +61,7 @@ async def upload_wardrobe_item(
         s3_key = f"wardrobe/{uuid4()}/{file.filename}"
         image_url = await upload_file_to_s3(
             file=file,
-            bucket=settings.s3_bucket_images,
+            bucket=settings.S3_BUCKET_IMAGES,
             key=s3_key
         )
 
@@ -85,7 +80,7 @@ async def upload_wardrobe_item(
 
         # Compute embedding
         image = load_image_file(file)
-        vector = compute_embedding(image)
+        vector = compute_embedding(image).tolist()
 
         # Insert embedding
         async with db.acquire() as conn:
@@ -109,22 +104,21 @@ async def upload_wardrobe_item(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# =====================================
-# 2️⃣ Predict + Similar Items
-# =====================================
+# Predict + Similar Items
 @router.post("/predict")
-async def predict_image(file: UploadFile = File(...)):
-    """
-    User uploads image → compute embedding → nearest-neighbor classification  
-    Also returns similar wardrobe items from pgvector search.
-    """
-
+async def predict_image(
+    file: UploadFile = File(...),
+    conn = Depends(get_db)
+):
     try:
         image = load_image_file(file)
         classified = classify_image(image)
 
-        # find nearest wardrobe items via pgvector SQL
-        similar = await find_similar_items(classified["embedding"], limit=5)
+        similar = await find_similar_items(
+            classified["embedding"],
+            conn=conn,
+            limit=5
+        )
 
         return {
             "filename": file.filename,
@@ -141,12 +135,12 @@ async def predict_image(file: UploadFile = File(...)):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Prediction failed: {str(e)}"
+        )
 
-
-# =====================================
-# 3️⃣ Generate Outfit (FAISS/logic)
-# =====================================
+# Generate Outfit (FAISS/logic)
 @router.post("/outfits/generate")
 async def generate_outfits(req: OutfitRequest):
     outfits = recommender.recommend_outfits(req.occasion, req.season)
@@ -158,9 +152,7 @@ async def generate_outfits(req: OutfitRequest):
     }
 
 
-# =====================================
-# 4️⃣ Save Outfit
-# =====================================
+# Save Outfit
 @router.post("/outfits/save")
 async def save_outfit(req: SaveOutfitRequest):
     try:
@@ -185,9 +177,7 @@ async def save_outfit(req: SaveOutfitRequest):
         raise HTTPException(status_code=500, detail=f"Save outfit failed: {str(e)}")
 
 
-# =====================================
-# 5️⃣ List Saved Outfits
-# =====================================
+# List Saved Outfits
 @router.get("/outfits/saved")
 async def get_saved_outfits():
     db = await get_db()
@@ -231,9 +221,7 @@ async def get_saved_outfits():
     return {"saved_outfits": response}
 
 
-# =====================================
-# 6️⃣ Upload Document
-# =====================================
+# Upload Document
 @router.post("/documents/upload", status_code=201)
 async def upload_document(file: UploadFile = File(...)):
     try:
@@ -242,7 +230,7 @@ async def upload_document(file: UploadFile = File(...)):
 
         s3_uri = await upload_file_to_s3(
             file=file,
-            bucket=settings.s3_bucket_documents,
+            bucket=settings.S3_BUCKET_DOCUMENTS,
             key=s3_key
         )
 

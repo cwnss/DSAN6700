@@ -8,8 +8,8 @@ class OutfitRecommender:
 
     def __init__(
         self,
-        engine_pkl_path: str = "app/recommender/recommendation_engine.pkl",
-        metadata_path: str = "app/recommender/item_metadata.pkl"
+        engine_pkl_path: str = "RecommendationFiles/recommendation_engine.pkl",
+        metadata_path: str = "backend/app/recommendations/item_metadata.pkl"
     ):
         # Load FAISS engine (already built in your example file)
         self.engine = FashionRecommendationEngine.load(engine_pkl_path)

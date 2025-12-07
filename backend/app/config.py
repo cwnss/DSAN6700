@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     AWS_REGION: str
     AWS_ACCESS_KEY_ID: str
     AWS_SECRET_ACCESS_KEY: str
+
+    #Buckets
     S3_BUCKET_DOCUMENTS: str
     S3_BUCKET_IMAGES: str
 
@@ -27,3 +29,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+print("DEBUG SETTINGS:", settings.AWS_ACCESS_KEY_ID, settings.AWS_SECRET_ACCESS_KEY)

@@ -10,7 +10,7 @@ This script demonstrates how to:
 """
 
 import numpy as np
-from recommendation_engine import (
+from RecommendationFiles.recommendation_engine import (
     FashionRecommendationEngine,
     benchmark_search_speed,
     analyze_memory_usage

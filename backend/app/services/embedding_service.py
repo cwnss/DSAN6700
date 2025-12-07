@@ -97,35 +97,17 @@ def classify_image(image: Image.Image):
 
 # 6. PGVECTOR SIMILARITY SEARCH (async)
 
-async def find_similar_items(vector, limit=10):
-    """
-    Given an embedding vector, return nearest stored wardrobe items
-    from PostgreSQL using pgvector "<->" similarity operator.
+async def find_similar_items(vector, conn, limit=10):
+    vector = np.asarray(vector, dtype=np.float32)
 
-    Outputs:
-        [
-            { "item_id": 1, "distance": 0.123 },
-            { "item_id": 7, "distance": 0.142 },
-            ...
-        ]
-    """
-
-    db = await get_db()
-
-    async with db.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT item_id, (embedding <-> $1) AS distance
-            FROM embeddings
-            ORDER BY embedding <-> $1
-            LIMIT $2
-            """,
-            vector,
-            limit
-        )
-
-    # Convert records to plain dicts
-    return [
-        {"item_id": r["item_id"], "distance": float(r["distance"])}
-        for r in rows
-    ]
+    rows = await conn.fetch(
+        """
+        SELECT item_id, embedding <-> $1 AS distance
+        FROM embeddings
+        ORDER BY embedding <-> $1
+        LIMIT $2
+        """,
+        vector,
+        limit
+    )
+    return rows
