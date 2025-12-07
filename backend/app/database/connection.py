@@ -1,43 +1,56 @@
 import asyncpg
 from backend.app.config import settings
 from pgvector.asyncpg import register_vector
+import logging
+
+logger = logging.getLogger("db")
+logger.setLevel(logging.INFO)
 
 _db_pool = None
 
 
-async def _init_pool():
+async def connect_to_db():
     """
-    Create the asyncpg pool and register pgvector on all connections.
+    Called ONCE at application startup.
+    Creates and warms the asyncpg pool.
     """
     global _db_pool
 
-    if _db_pool is None:
+    if _db_pool is not None:
+        return _db_pool
+
+    logger.info("Initializing PostgreSQL connection pool…")
+
+    try:
         _db_pool = await asyncpg.create_pool(
             dsn=settings.DATABASE_URL,
             min_size=1,
             max_size=5,
-            init=_init_connection  # register pgvector per connection
+            timeout=10,
+            init=_init_connection
         )
+        logger.info("PostgreSQL pool initialized successfully.")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize DB pool: {e}")
+        raise
 
     return _db_pool
 
 
 async def _init_connection(conn):
-    """
-    Called for every new connection in the pool.
-    Ensures pgvector is registered so asyncpg accepts numpy arrays / lists.
-    """
+    """Registers pgvector for every fresh connection."""
     await register_vector(conn)
 
 
 async def get_db():
     """
-    Dependency for FastAPI.
-    Ensures the pool exists, retrieves a connection,
-    and releases it afterward.
+    FastAPI dependency.
+    Uses an already-initialized pool.
+    NEVER creates a pool on request.
     """
-    pool = await _init_pool()
-    async with pool.acquire() as conn:
-        # register again (harmless, but ensures correctness)
-        await register_vector(conn)
+    if _db_pool is None:
+        await connect_to_db()   # safety net, runs instantly after startup
+
+    async with _db_pool.acquire() as conn:
+        await register_vector(conn)  # safe no-op
         yield conn
