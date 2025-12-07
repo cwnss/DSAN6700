@@ -12,14 +12,14 @@ s3 = boto3.client(
 
 
 async def upload_file_to_s3(file, bucket: str, key: str) -> str:
-    # MUST use the already authenticated client
-    body = await file.read()
+    file.seek(0)
+    body = file.read()
 
     s3.put_object(
         Bucket=bucket,
         Key=key,
         Body=body,
-        ContentType=file.content_type,
+        ContentType="image/jpeg",
     )
 
     return f"s3://{bucket}/{key}"
