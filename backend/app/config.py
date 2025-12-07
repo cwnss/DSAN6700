@@ -19,13 +19,10 @@ class Settings(BaseSettings):
     S3_BUCKET_DOCUMENTS: str
     S3_BUCKET_IMAGES: str
 
-    # Model files
-    EMBEDDING_PATH: str
-    LABEL_PATH: str
-
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 settings = Settings()
