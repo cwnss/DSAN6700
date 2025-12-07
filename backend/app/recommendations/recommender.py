@@ -11,17 +11,14 @@ class OutfitRecommender:
         engine_pkl_path: str = "RecommendationFiles/recommendation_engine.pkl",
         metadata_path: str = "backend/app/recommendations/item_metadata.pkl"
     ):
-        # Load FAISS engine (already built in your example file)
         self.engine = FashionRecommendationEngine.load(engine_pkl_path)
 
         # Load metadata containing:
-        # item_id → class_label, season_tags, occasion_tags
+        # item_id: class_label, season_tags, occasion_tags
         with open(metadata_path, "rb") as f:
             self.meta = pickle.load(f)
 
-    # ---------------------------------------------------------
     # Build outfit recommendations using FAISS + metadata
-    # ---------------------------------------------------------
     def recommend_outfits(self, occasion: str, season: str, k: int = 10):
         outfits = []
 

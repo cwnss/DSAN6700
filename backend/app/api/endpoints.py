@@ -71,14 +71,14 @@ class SaveOutfitRequest(BaseModel):
 async def upload_wardrobe_item(
     category: str,
     file: UploadFile = File(...),
-    db=Depends(get_db)
+    db=Depends(get_db)  # db is a real asyncpg Connection
 ):
     request_id = str(uuid4())
-    logger.info(f"[{request_id}] Wardrobe upload started. category={category}, filename={file.filename}")
+    logger.info(f"[{request_id}] Upload started: category={category}, filename={file.filename}")
 
     try:
         # --------------------------------------------------------
-        # Read Image Bytes
+        # Read UploadFile contents
         # --------------------------------------------------------
         t0 = time.time()
         contents = await file.read()
@@ -92,78 +92,64 @@ async def upload_wardrobe_item(
         # --------------------------------------------------------
         t1 = time.time()
         s3_key = f"wardrobe/{uuid4()}/{file.filename}"
-        logger.info(f"[{request_id}] Uploading to S3… key={s3_key}")
+
+        file_stream = io.BytesIO(contents)
+        file_stream.seek(0)
 
         image_url = await upload_file_to_s3(
-            file=io.BytesIO(contents),
+            file=file_stream,
             bucket=settings.S3_BUCKET_IMAGES,
             key=s3_key
         )
-
-        logger.info(f"[{request_id}] Step2: S3 uploaded in {time.time() - t1:.3f}s → URL={image_url}")
+        logger.info(f"[{request_id}] Step2: S3 upload completed in {time.time() - t1:.3f}s")
 
         # --------------------------------------------------------
-        # Insert wardrobe row
+        # Insert wardrobe row (db is a CONNECTION now)
         # --------------------------------------------------------
         t2 = time.time()
-        async with db.acquire() as conn:
-            item_id = await conn.fetchval(
-                """
-                INSERT INTO wardrobe_items (image_url, category)
-                VALUES ($1, $2)
-                RETURNING item_id
-                """,
-                image_url, category
-            )
-        logger.info(f"[{request_id}] Step3: DB wardrobe insert → item_id={item_id} ({time.time() - t2:.3f}s)")
+        item_id = await db.fetchval(
+            """
+            INSERT INTO wardrobe_items (image_url, category)
+            VALUES ($1, $2)
+            RETURNING item_id
+            """,
+            image_url, category
+        )
+        logger.info(f"[{request_id}] Step3: DB insert wardrobe → item_id={item_id} ({time.time() - t2:.3f}s)")
 
         # --------------------------------------------------------
-        # Compute Embedding
+        # Compute embedding
         # --------------------------------------------------------
         t3 = time.time()
-        logger.info(f"[{request_id}] Computing embedding…")
-
         image = Image.open(io.BytesIO(contents)).convert("RGB")
         vector = compute_embedding(image).tolist()
-
-        logger.info(f"[{request_id}] Step4: embedding computed len={len(vector)} in {time.time() - t3:.3f}s")
+        logger.info(f"[{request_id}] Step4: embedding computed ({time.time() - t3:.3f}s)")
 
         # --------------------------------------------------------
-        # Insert Embedding into DB
+        # Insert embedding row
         # --------------------------------------------------------
         t4 = time.time()
-        async with db.acquire() as conn:
-            await conn.execute(
-                """
-                INSERT INTO embeddings (item_id, embedding)
-                VALUES ($1, $2)
-                """,
-                item_id,
-                vector
-            )
-        logger.info(f"[{request_id}] Step5: embedding inserted into DB ({time.time() - t4:.3f}s)")
+        await db.execute(
+            """
+            INSERT INTO embeddings (item_id, embedding)
+            VALUES ($1, $2)
+            """,
+            item_id, vector
+        )
+        logger.info(f"[{request_id}] Step5: DB insert embedding ({time.time() - t4:.3f}s)")
 
-        # --------------------------------------------------------
-        # Done
-        # --------------------------------------------------------
         total = time.time() - t0
-        logger.info(f"[{request_id}] ✔ Upload complete in {total:.3f}s")
+        logger.info(f"[{request_id}] ✔ Upload completed in {total:.3f}s")
 
         return {
             "status": "success",
             "item_id": item_id,
             "image_url": image_url,
-            "message": "Wardrobe item saved."
         }
 
     except Exception as e:
-        error_msg = f"[{request_id}] ❌ ERROR: {str(e)}\n{traceback.format_exc()}"
-        logger.error(error_msg)
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Wardrobe upload failed: {str(e)}"
-        )
+        logger.error(f"[{request_id}] Upload failed: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Wardrobe upload failed: {str(e)}")
 
 
 
