@@ -1,7 +1,7 @@
 import boto3
 from botocore.client import Config
 from backend.app.config import settings
-#print("DEBUG BOTO CREDS:", settings.AWS_ACCESS_KEY_ID, settings.AWS_SECRET_ACCESS_KEY)
+print("DEBUG BOTO CREDS:", settings.AWS_ACCESS_KEY_ID, settings.AWS_SECRET_ACCESS_KEY)
 
 # Use Signature Version 4 for presigned URLs (required by modern S3)
 s3 = boto3.client(
