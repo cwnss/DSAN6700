@@ -1,0 +1,44 @@
+FRONTEND PR NOTES - Courtney
+=============================
+
+CLEANUP BEFORE FINAL SUBMISSION
+-------------------------------
+1. Remove "Backend connected" status indicator
+   - File: frontend/app.py (around line 958-962)
+   - The try/except block that shows connection status in sidebar
+   - This was just for development/debugging
+
+2. Remove clear-all endpoint (testing only)
+   - File: backend/app/api/endpoints.py (around line 398-407)
+   - The /wardrobe/clear-all DELETE endpoint
+   - File: frontend/api_client.py (around line 134-135)
+   - The clear_all_wardrobe_items() method
+
+
+FOR SATOMI (Database Work Needed)
+---------------------------------
+1. Outfit Name Column
+   - Currently storing outfit names in the occasion field as a workaround
+   - Format: "Outfit Name | Occasion" 
+   - Location: backend/app/api/endpoints.py line 281
+   - Need to run: ALTER TABLE saved_outfits ADD COLUMN name VARCHAR(255) DEFAULT '';
+   - Then update the save_outfit and get_saved_outfits endpoints to use the new column
+
+2. Edit Metadata Not Persisted
+   - The Edit button on wardrobe items only saves to session state right now
+   - Need UPDATE queries in backend for metadata fields (occasion, season, colors, notes)
+   - wardrobe_items table has a metadata JSONB column but we're not updating it
+
+3. S3 Presigned URLs
+   - Currently converting S3 URIs to presigned URLs on every API request
+   - This works but might want to consider CDN or storing public URLs instead
+
+
+CACHING (KEEP THESE)
+--------------------
+- @st.cache_data(ttl=300) for saved outfits - prevents repeated DB calls
+- @st.cache_data(ttl=60) for wardrobe items - shorter TTL bc presigned URLs expire
+- @st.cache_resource for API client - single instance
+- .clear() calls after save/delete - refreshes data when things change
+
+

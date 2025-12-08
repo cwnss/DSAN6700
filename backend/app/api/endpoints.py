@@ -7,7 +7,7 @@ import io
 
 from PIL import Image
 
-from backend.app.services.s3_service import upload_file_to_s3
+from backend.app.services.s3_service import upload_file_to_s3, get_presigned_url
 from backend.app.database.connection import get_db
 from backend.app.config import settings
 
@@ -62,6 +62,7 @@ class SaveOutfitRequest(BaseModel):
     items: List[int]
     occasion: str
     season: str
+    name: str = ""
 
 
 # -----------------------------
@@ -152,6 +153,60 @@ async def upload_wardrobe_item(
         raise HTTPException(status_code=500, detail=f"Wardrobe upload failed: {str(e)}")
 
 
+# -----------------------------
+# Get All Wardrobe Items
+# -----------------------------
+@router.get("/wardrobe/items")
+async def get_wardrobe_items(db=Depends(get_db)):
+    # Fetch all wardrobe items from database
+    # db is already a connection from get_db() dependency
+    items = await db.fetch(
+        """
+        SELECT item_id, image_url, category, metadata
+        FROM wardrobe_items
+        ORDER BY item_id DESC
+        """
+    )
+    
+    # Convert to list of dicts
+    response = []
+    for row in items:
+        # Handle metadata - it might be None, dict, or JSON string
+        metadata = row.get("metadata")
+        if metadata is None:
+            metadata = {}
+        elif isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except:
+                metadata = {}
+        elif not isinstance(metadata, dict):
+            metadata = {}
+        
+        # Convert S3 URI to presigned URL for frontend display
+        image_url = row["image_url"]
+        if image_url and image_url.startswith("s3://"):
+            try:
+                image_url = get_presigned_url(image_url)
+                logger.info(f"Converted S3 URI to presigned URL for item {row['item_id']}")
+            except Exception as e:
+                logger.error(f"Failed to generate presigned URL for item {row['item_id']}: {e}")
+                # Keep original S3 URI if conversion fails
+        
+        response.append({
+            "item_id": row["item_id"],
+            "image_url": image_url,
+            "category": row["category"],
+            "subcategory": metadata.get("subcategory"),
+            "brand": metadata.get("brand"),
+            "colors": metadata.get("colors", []),
+            "occasions": metadata.get("occasions", []),
+            "season": metadata.get("season"),
+            "notes": metadata.get("notes"),
+        })
+    
+    return {"items": response}
+
 
 # -----------------------------
 # Predict + Similar Items
@@ -175,12 +230,11 @@ async def predict_image(
 
         embedding = classified["embedding"]
 
-        async with db.acquire() as conn:
-            similar = await find_similar_items(
-                embedding,
-                conn=conn,
-                limit=5
-            )
+        similar = await find_similar_items(
+            embedding,
+            conn=db,
+            limit=5
+        )
 
         return {
             "filename": file.filename,
@@ -224,17 +278,20 @@ async def save_outfit(req: SaveOutfitRequest, db=Depends(get_db)):
     try:
         outfit_id = str(uuid4())
 
-        async with db.acquire() as conn:
-            await conn.execute(
-                """
-                INSERT INTO saved_outfits (outfit_id, items, occasion, season)
-                VALUES ($1, $2, $3, $4)
-                """,
-                outfit_id,
-                req.items,
-                req.occasion,
-                req.season,
-            )
+        # Store name in occasion field temporarily until DB has name column
+        # Format: "Outfit Name | Occasion" or just "Occasion" if no name
+        occasion_with_name = f"{req.name} | {req.occasion}" if req.name else req.occasion
+
+        await db.execute(
+            """
+            INSERT INTO saved_outfits (outfit_id, items, occasion, season)
+            VALUES ($1, $2, $3, $4)
+            """,
+            outfit_id,
+            req.items,
+            occasion_with_name,
+            req.season,
+        )
 
         return {"status": "success", "outfit_id": outfit_id}
 
@@ -248,23 +305,33 @@ async def save_outfit(req: SaveOutfitRequest, db=Depends(get_db)):
 @router.get("/outfits/saved")
 async def get_saved_outfits(db=Depends(get_db)):
 
-    async with db.acquire() as conn:
-        outfits = await conn.fetch(
-            """
-            SELECT outfit_id, items, occasion, season, created_at
-            FROM saved_outfits
-            ORDER BY created_at DESC
-            """
-        )
+    outfits = await db.fetch(
+        """
+        SELECT outfit_id, items, occasion, season, created_at
+        FROM saved_outfits
+        ORDER BY created_at DESC
+        """
+    )
 
-        wardrobe = await conn.fetch(
-            """
-            SELECT item_id, image_url, category, metadata
-            FROM wardrobe_items
-            """
-        )
+    wardrobe = await db.fetch(
+        """
+        SELECT item_id, image_url, category, metadata
+        FROM wardrobe_items
+        """
+    )
 
-    wardrobe_lookup = {row["item_id"]: dict(row) for row in wardrobe}
+    # Build lookup and convert S3 URIs to presigned URLs
+    wardrobe_lookup = {}
+    for wrow in wardrobe:
+        item_data = dict(wrow)
+        # Convert S3 URI to presigned URL
+        image_url = item_data.get("image_url")
+        if image_url and image_url.startswith("s3://"):
+            try:
+                item_data["image_url"] = get_presigned_url(image_url)
+            except Exception as e:
+                logger.error(f"Failed to generate presigned URL: {e}")
+        wardrobe_lookup[wrow["item_id"]] = item_data
 
     response = []
     for row in outfits:
@@ -280,15 +347,66 @@ async def get_saved_outfits(db=Depends(get_db)):
         created_at = row["created_at"]
         created_at = created_at.isoformat() if created_at else None
 
+        # Parse name from occasion if it contains " | "
+        occasion_raw = row["occasion"]
+        if " | " in occasion_raw:
+            name, occasion = occasion_raw.split(" | ", 1)
+        else:
+            name = ""
+            occasion = occasion_raw
+        
         response.append({
             "outfit_id": row["outfit_id"],
-            "occasion": row["occasion"],
+            "name": name,
+            "occasion": occasion,
             "season": row["season"],
             "created_at": created_at,
             "items": enriched_items
         })
 
     return {"saved_outfits": response}
+
+
+# -----------------------------
+# Delete Saved Outfit
+# -----------------------------
+@router.delete("/outfits/{outfit_id}")
+async def delete_outfit(outfit_id: str, db=Depends(get_db)):
+    try:
+        await db.execute("DELETE FROM saved_outfits WHERE outfit_id = $1", outfit_id)
+        return {"status": "success", "deleted_outfit_id": outfit_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Delete outfit failed: {str(e)}")
+
+
+# -----------------------------
+# Delete Wardrobe Item
+# -----------------------------
+@router.delete("/wardrobe/item/{item_id}")
+async def delete_wardrobe_item(item_id: int, db=Depends(get_db)):
+    try:
+        # Delete embedding first (foreign key)
+        await db.execute("DELETE FROM embeddings WHERE item_id = $1", item_id)
+        # Delete wardrobe item
+        result = await db.execute("DELETE FROM wardrobe_items WHERE item_id = $1", item_id)
+        return {"status": "success", "deleted_item_id": item_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+
+
+# -----------------------------
+# Clear All Wardrobe Items (for testing)
+# -----------------------------
+@router.delete("/wardrobe/clear-all")
+async def clear_all_wardrobe_items(db=Depends(get_db)):
+    try:
+        # Delete all embeddings first (foreign key constraint)
+        await db.execute("DELETE FROM embeddings")
+        # Delete all wardrobe items
+        await db.execute("DELETE FROM wardrobe_items")
+        return {"status": "success", "message": "All wardrobe items cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Clear failed: {str(e)}")
 
 
 # -----------------------------
@@ -314,16 +432,15 @@ async def upload_document(file: UploadFile = File(...), db=Depends(get_db)):
             "s3_uri": s3_uri
         }
 
-        async with db.acquire() as conn:
-            await conn.execute(
-                """
-                INSERT INTO documents (document_id, s3_uri, metadata)
-                VALUES ($1, $2, $3::jsonb)
-                """,
-                document_id,
-                s3_uri,
-                json.dumps(metadata)
-            )
+        await db.execute(
+            """
+            INSERT INTO documents (document_id, s3_uri, metadata)
+            VALUES ($1, $2, $3::jsonb)
+            """,
+            document_id,
+            s3_uri,
+            json.dumps(metadata)
+        )
 
         return {"status": "success", "document_id": document_id, "s3_uri": s3_uri}
 

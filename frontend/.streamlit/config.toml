@@ -1,0 +1,19 @@
+[theme]
+# Primary color 
+base="light"
+primaryColor = "#6B4C98"
+
+
+# Background colors
+backgroundColor = "#FAF8F5"
+secondaryBackgroundColor="#e0beeb"
+
+# Text colors
+textColor = "#2E2E2E"
+
+# Font (CSS in app.py will override this with Nunito)
+font = "sans serif"
+
+[server]
+# Optional: set port if needed
+# port = 8501
