@@ -43,7 +43,7 @@ def test_basic_functionality():
     assert recommendations[0]['rank'] == 1, "First recommendation should have rank 1"
     assert recommendations[0]['index'] == query_idx, "Query item should be most similar to itself"
     
-    print("✓ Basic functionality test passed")
+    print("Basic functionality test passed")
     return True
 
 
@@ -87,7 +87,7 @@ def test_filtering():
     for rec in recommendations:
         assert rec['index'] not in [0, 1, 2], f"Excluded indices should not appear in results"
     
-    print("✓ Filtering test passed")
+    print("Filtering test passed")
     return True
 
 
@@ -124,7 +124,7 @@ def test_save_load():
     for r1, r2 in zip(rec1, rec2):
         assert r1['index'] == r2['index'], "Results should match"
     
-    print("✓ Save/load test passed")
+    print("Save/load test passed")
     return True
 
 
@@ -140,7 +140,7 @@ def main():
         test_save_load()
         
         print("\n" + "="*60)
-        print("All tests passed! ✓")
+        print("All tests passed!")
         print("="*60)
         
     except Exception as e:

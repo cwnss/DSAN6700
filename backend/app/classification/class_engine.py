@@ -12,8 +12,8 @@ from sklearn.preprocessing import LabelEncoder
 class ClassificationEngine:
     def __init__(
         self,
-        embedding_path: str = "/mnt/data/fashion_mnist_resnet50_embeddings.npy",
-        label_path: str = "/mnt/data/fashion_mnist_labels.npy",
+        embedding_path: str = "ComputerVisionFiles/fashion_mnist_resnet50_embeddings.npy",
+        label_path: str = "ComputerVisionFiles/fashion_mnist_labels.npy",
     ):
         """
         Loads all embeddings and labels into memory, and trains the classifier once.
@@ -49,9 +49,9 @@ class ClassificationEngine:
         self.model = LogisticRegression(max_iter=3000)
         self.model.fit(self.X, self.y)
 
-        print("✔ ClassificationEngine initialized.")
-        print(f"✔ Loaded {self.X.shape[0]} embeddings.")
-        print(f"✔ Classes: {self.label_encoder.classes_.tolist()}")
+        print("ClassificationEngine initialized.")
+        print(f"Loaded {self.X.shape[0]} embeddings.")
+        print(f"Classes: {self.label_encoder.classes_.tolist()}")
 
 
     # ---------------------------------------------------------------------

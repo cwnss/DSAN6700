@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[3]
 import sys
 sys.path.append(str(ROOT))
 
-from RecommendationFiles.example_usage import FashionRecommendationEngine
+from RecommendationFiles.recommendation_engine import FashionRecommendationEngine
 
 # Load Recommendation Engine
 

@@ -211,9 +211,9 @@ def main():
     print("\n" + "="*60)
     print("Benchmark Summary")
     print("="*60)
-    print("✓ PCA component count comparison completed")
-    print("✓ Index type comparison completed")
-    print("✓ Filtering overhead analysis completed")
+    print("PCA component count comparison completed")
+    print("Index type comparison completed")
+    print("Filtering overhead analysis completed")
     print("\nRecommendation: Use 128 components with L2 index for optimal")
     print("balance between speed, memory, and accuracy.")
 

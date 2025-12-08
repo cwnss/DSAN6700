@@ -22,10 +22,10 @@ def check_files():
         if not os.path.exists(file):
             missing_files.append(file)
         else:
-            print(f"   ✓ Found: {file}")
+            print(f"   Found: {file}")
     
     if missing_files:
-        print("\n   ❌ Missing files:")
+        print("\n   Missing files:")
         for file in missing_files:
             print(f"      - {file}")
         print("\n   Solution: Run 'git lfs pull' to download data files")
@@ -49,9 +49,9 @@ def check_packages():
     for module, package in packages.items():
         try:
             __import__(module)
-            print(f"   ✓ {package} installed")
+            print(f"   {package} installed")
         except ImportError:
-            print(f"   ❌ {package} NOT installed")
+            print(f"   {package} NOT installed")
             missing.append(package)
     
     if missing:
@@ -97,7 +97,7 @@ def run_quick_test():
         query_embedding = embeddings[0]
         recommendations = engine.recommend(query_embedding, k=5)
         
-        print(f"   ✓ Got {len(recommendations)} recommendations")
+        print(f"   Got {len(recommendations)} recommendations")
         print(f"   Top result: Item {recommendations[0]['index']}, "
               f"Class: {recommendations[0]['class_name']}, "
               f"Distance: {recommendations[0]['distance']:.4f}")
@@ -114,7 +114,7 @@ def run_quick_test():
         return True
         
     except Exception as e:
-        print(f"\n   ❌ Test failed: {e}")
+        print(f"\n   Test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -129,21 +129,21 @@ def main():
     
     # Check files
     if not check_files():
-        print("\n❌ File check failed. Please fix issues above.")
+        print("\nFile check failed. Please fix issues above.")
         sys.exit(1)
     
     # Check packages
     if not check_packages():
-        print("\n❌ Package check failed. Please install missing packages.")
+        print("\nPackage check failed. Please install missing packages.")
         sys.exit(1)
     
     # Run test
     if not run_quick_test():
-        print("\n❌ Functionality test failed.")
+        print("\nFunctionality test failed.")
         sys.exit(1)
     
     print("\n" + "="*60)
-    print("✅ All checks passed! The recommendation engine works!")
+    print("All checks passed! The recommendation engine works!")
     print("="*60)
     print("\nNext steps:")
     print("  - Run 'python test_integration.py' for full integration tests")

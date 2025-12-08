@@ -41,10 +41,10 @@ python quick_test.py
 ```
 
 This will check:
-- ✅ All data files exist
-- ✅ Required packages are installed
-- ✅ Basic functionality works
-- ✅ Memory usage statistics
+- All data files exist
+- Required packages are installed
+- Basic functionality works
+- Memory usage statistics
 
 ### Step 3: Basic Usage
 
@@ -132,7 +132,7 @@ recommendations = engine.recommend(
 python test_integration.py
 ```
 
-Expected output: "All tests passed! ✓"
+Expected output: "All tests passed!"
 
 ### Example Usage
 
@@ -347,7 +347,7 @@ with open('../ComputerVisionFiles/fashion_mnist_classes.txt', 'r') as f:
 engine = FashionRecommendationEngine(embeddings, labels, class_names, n_components=128)
 engine.build_index()
 recs = engine.recommend(embeddings[0], k=5)
-print('✓ Success! Engine works. Got', len(recs), 'recommendations')
+print('Success! Engine works. Got', len(recs), 'recommendations')
 "
 ```
 

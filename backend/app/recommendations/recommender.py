@@ -1,7 +1,7 @@
 import numpy as np
 import pickle
 from typing import List, Dict
-from RecommendationFiles.example_usage import FashionRecommendationEngine
+from RecommendationFiles.recommendation_engine import FashionRecommendationEngine
 
 
 class OutfitRecommender:
