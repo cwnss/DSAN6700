@@ -1059,7 +1059,17 @@ def get_cached_wardrobe_items():
         raise Exception(f"Failed to fetch wardrobe items: {str(e)}")
 
 # --- Sidebar ---
-st.sidebar.image("frontend/logo.png")
+import os
+from pathlib import Path
+
+# Absolute path to the directory where app.py lives
+BASE_DIR = Path(__file__).resolve().parent
+
+logo_path = BASE_DIR / "logo.png"
+
+st.sidebar.image(str(logo_path))
+
+st.sidebar.image("logo.png")
 st.sidebar.title("Generate outfits from your wardrobe.")
 #st.sidebar.write("Your digital stylist")
 
