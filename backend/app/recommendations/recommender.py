@@ -1,7 +1,9 @@
+import time
 import numpy as np
 import logging
 from typing import List, Dict, Set
 from RecommendationFiles.recommendation_engine import FashionRecommendationEngine
+from backend.app.metrics import ML_INFERENCE_TIME
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,7 @@ class OutfitRecommender:
         Build outfit recommendations using the ML recommendation engine.
         Uses embeddings to find visually compatible items.
         """
+        start_time = time.time()
         # Get all wardrobe items WITH their embeddings
         wardrobe = await db.fetch(
             """
@@ -33,6 +36,7 @@ class OutfitRecommender:
 
         if not wardrobe:
             logger.warning("[RECOMMENDER] No wardrobe items with embeddings found!")
+            ML_INFERENCE_TIME.labels(operation="recommendation").observe(time.time() - start_time)
             return []
 
         def extract_list(meta, key):
@@ -155,6 +159,7 @@ class OutfitRecommender:
 
         if not tops and not bottoms and not dresses:
             logger.warning("[RECOMMENDER] No tops, bottoms, or dresses found!")
+            ML_INFERENCE_TIME.labels(operation="recommendation").observe(time.time() - start_time)
             return []
 
         outfits = []
@@ -369,5 +374,6 @@ class OutfitRecommender:
         # Sort by score and return top k
         outfits.sort(key=lambda x: x["score"], reverse=True)
         logger.info(f"[RECOMMENDER] Returning {min(len(outfits), k)} outfits")
-        
+
+        ML_INFERENCE_TIME.labels(operation="recommendation").observe(time.time() - start_time)
         return outfits[:k]
