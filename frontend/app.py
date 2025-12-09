@@ -1215,12 +1215,31 @@ if page == "My Wardrobe":
                             
                             file_bytes_io = BytesIO(file_bytes)
                             
-                            # Upload to backend
+                            # Upload to backend (creates item with just category)
                             response = api_client.upload_wardrobe_item(
                                 image_file=file_bytes_io,
                                 filename=uploaded_file.name,
                                 category=category
                             )
+                            
+                            # Ensure required fields have defaults
+                            final_season = season if season else ["All-Season"]
+                            final_occasions = occasions if occasions else ["Casual"]
+                            colors_list = [c.strip() for c in colors.split(",") if c.strip()] if colors else []
+                            
+                            # Update item with all metadata (season, occasion, etc.)
+                            item_id = response.get("item_id")
+                            if item_id:
+                                api_client.update_wardrobe_item(
+                                    item_id=item_id,
+                                    category=category,
+                                    subcategory=subcategory or "",
+                                    season=final_season,
+                                    brand=brand or "",
+                                    colors=colors_list,
+                                    occasions=final_occasions,
+                                    notes=notes or ""
+                                )
                             
                             # Store in session state for display (until backend has GET endpoint)
                             # Use base64 encoding for reliable storage in session state
@@ -1242,10 +1261,6 @@ if page == "My Wardrobe":
                             except Exception as e:
                                 st.error(f"Base64 encoding error: {str(e)}")
                             
-                            # Ensure required fields have defaults
-                            final_season = season if season else ["All-Season"]
-                            final_occasions = occasions if occasions else ["Casual"]
-                            
                             item_data = {
                                 "item_id": response.get("item_id"),
                                 "image_url": response.get("image_url"),
@@ -1253,7 +1268,7 @@ if page == "My Wardrobe":
                                 "season": final_season,
                                 "subcategory": subcategory,
                                 "brand": brand,
-                                "colors": [c.strip() for c in colors.split(",") if c.strip()] if colors else [],
+                                "colors": colors_list,
                                 "occasions": final_occasions,
                                 "notes": notes,
                                 "image_base64": image_base64  # Store as base64 string
@@ -1261,7 +1276,8 @@ if page == "My Wardrobe":
                             
                             if "uploaded_items" not in st.session_state:
                                 st.session_state.uploaded_items = []
-                            st.session_state.uploaded_items.append(item_data)
+                            # Insert at beginning so newest items appear first
+                            st.session_state.uploaded_items.insert(0, item_data)
                             
                             # Clear cache so backend items refresh
                             get_cached_wardrobe_items.clear()
