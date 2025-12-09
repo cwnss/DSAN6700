@@ -1,6 +1,8 @@
 import boto3
+import time
 from botocore.client import Config
 from backend.app.config import settings
+from backend.app.metrics import AWS_S3_CALLS, AWS_S3_BYTES, AWS_S3_TIME
 #print("DEBUG BOTO CREDS:", settings.AWS_ACCESS_KEY_ID, settings.AWS_SECRET_ACCESS_KEY)
 
 # Use Signature Version 4 for presigned URLs (required by modern S3)
@@ -17,12 +19,16 @@ async def upload_file_to_s3(file, bucket: str, key: str) -> str:
     file.seek(0)
     body = file.read()
 
+    start = time.time()
     s3.put_object(
         Bucket=bucket,
         Key=key,
         Body=body,
         ContentType="image/jpeg",
     )
+    AWS_S3_TIME.labels(operation="upload").observe(time.time() - start)
+    AWS_S3_CALLS.labels(operation="upload").inc()
+    AWS_S3_BYTES.labels(direction="upload").inc(len(body))
 
     return f"s3://{bucket}/{key}"
 
@@ -64,11 +70,14 @@ def get_presigned_url(s3_uri: str, expiration: int = 3600) -> str:
         )
         
         # Generate presigned URL with the correct region
+        start = time.time()
         url = s3_client.generate_presigned_url(
             'get_object',
             Params={'Bucket': bucket, 'Key': key},
             ExpiresIn=expiration
         )
+        AWS_S3_TIME.labels(operation="get_presigned_url").observe(time.time() - start)
+        AWS_S3_CALLS.labels(operation="get_presigned_url").inc()
         return url
     except Exception as e:
         # If presigned URL generation fails, return original

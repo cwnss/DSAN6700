@@ -5,6 +5,7 @@ Embedding service for:
 - Running pgvector similarity search against wardrobe_items in PostgreSQL
 """
 
+import time
 import numpy as np
 import torch
 import torch.nn as nn
@@ -12,6 +13,7 @@ from torchvision import models, transforms
 from PIL import Image
 
 from backend.app.database.connection import get_db  # <-- required for pgvector search
+from backend.app.metrics import ML_INFERENCE_TIME
 
 
 # 1. IMAGE PREPROCESSING FOR RESNET50
@@ -38,11 +40,13 @@ def compute_embedding(image: Image.Image) -> np.ndarray:
     """
     Compute a 2048-D ResNet50 embedding for a PIL image.
     """
+    start = time.time()
     tensor = preprocess(image).unsqueeze(0)
 
     with torch.no_grad():
         vec = embedding_model(tensor).squeeze().numpy()
 
+    ML_INFERENCE_TIME.labels(operation="embedding").observe(time.time() - start)
     return vec  # shape (2048,)
 
 
@@ -84,8 +88,10 @@ def classify_image(image: Image.Image):
     """
     Convert image → embedding → nearest precomputed label.
     """
+    start = time.time()
     emb = compute_embedding(image)
     label, confidence, idx = find_nearest_neighbor(emb)
+    ML_INFERENCE_TIME.labels(operation="classification").observe(time.time() - start)
 
     return {
         "embedding": emb,
