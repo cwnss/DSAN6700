@@ -1125,22 +1125,28 @@ if page == "My Wardrobe":
 
             
             # Convert backend items to match session state format
-            # Backend items have image_url, but we need to keep them as-is
+            # Backend items have image_url, but need to keep them as-is
             # Newly uploaded items will have image_base64 for immediate display
             for backend_item in backend_items:
                 item_id = backend_item.get("item_id")
                 # Check if item already exists in session state (by item_id)
                 existing_item = None
-                for existing in st.session_state.uploaded_items:
+                existing_idx = None
+                for idx, existing in enumerate(st.session_state.uploaded_items):
                     if existing.get("item_id") == item_id:
                         existing_item = existing
+                        existing_idx = idx
                         break
                 
                 if existing_item:
-                    # Merge: Keep tags from session state, update image_url from backend
-                    existing_item["image_url"] = backend_item.get("image_url", existing_item.get("image_url"))
-                    # Preserve all tags from session state (they may have been edited)
-                    # Don't overwrite tags with backend data
+                    # Update with backend data but preserve image_base64 for display
+                    image_base64 = existing_item.get("image_base64")
+                    # Update all fields from backend (includes edited metadata)
+                    for key, value in backend_item.items():
+                        existing_item[key] = value
+                    # Restore image_base64 if it existed (for immediate display)
+                    if image_base64:
+                        existing_item["image_base64"] = image_base64
                 else:
                     # New item from backend - add it
                     st.session_state.uploaded_items.append(backend_item)
@@ -1160,7 +1166,6 @@ if page == "My Wardrobe":
         st.toast("Changes saved!")
         st.session_state.show_save_success = False
     
-    # Fix pluralization: "1 item" vs "X items"
     item_count = len(st.session_state.uploaded_items) if st.session_state.uploaded_items else 0
     if item_count == 1:
         st.write(f"{item_count} item in your collection")
@@ -1188,9 +1193,9 @@ if page == "My Wardrobe":
 
     # Show "Upload Your First Item" button when uploader is not shown and wardrobe is empty
     if len(st.session_state.uploaded_items) == 0 and not st.session_state.show_uploader:
-        col1, col2, col3 = st.columns([1, 2, 1])
+        col1, col2, col3 = st.columns([2, 1, 2])
         with col2:
-            if st.button("Upload Your First Item!"):
+            if st.button("Upload Your First Item!", type="primary", use_container_width=True):
                 st.session_state.show_uploader = True
                 st.rerun()
 
@@ -1540,7 +1545,7 @@ if page == "My Wardrobe":
                                 )
                                 edit_notes = st.text_area("Notes", value=item.get("notes", ""), key=f"edit_notes_{item_id}", height=60)
                                 
-                                if st.button("Save Changes", key=f"save_{item_id}", use_container_width=True):
+                                if st.button("Save", key=f"save_{item_id}", use_container_width=True, type="primary"):
                                     try:
                                         with st.spinner("Saving changes..."):
                                             # Parse colors from comma-separated string, ensure no None values
@@ -1703,14 +1708,62 @@ elif page == "Outfit Builder":
                             del st.session_state.outfit_selections[cat]
                         st.rerun()
             
+            # Add from Wardrobe button
+            with st.expander("Add from Wardrobe", expanded=False):
+                st.caption("Select an item to add to your outfit")
+                
+                # Get item IDs already in outfit
+                item_ids_in_outfit = set(st.session_state.outfit_selections.values())
+                
+                # Filter to show items not already in outfit (by ID, so user can swap same-category items)
+                available_items = [
+                    item for item in st.session_state.uploaded_items 
+                    if item.get("item_id") not in item_ids_in_outfit
+                ]
+                
+                if available_items:
+                    # Group by category
+                    categories = sorted(set(item.get("category", "Other") for item in available_items))
+                    selected_category = st.selectbox("Filter by Category", ["All"] + categories, key="add_item_category_filter")
+                    
+                    if selected_category != "All":
+                        available_items = [item for item in available_items if item.get("category") == selected_category]
+                    
+                    # Display items in grid
+                    add_cols = st.columns(4)
+                    for idx, item in enumerate(available_items):
+                        with add_cols[idx % 4]:
+                            img_src = get_image_src(item)
+                            if img_src:
+                                st.image(img_src, use_container_width=True)
+                            st.caption(f"{item.get('category', '')} - {item.get('subcategory', '') or item.get('brand', '')}")
+                            if st.button("Add", key=f"add_to_outfit_{item.get('item_id')}", use_container_width=True, type="primary"):
+                                cat = item.get("category")
+                                st.session_state.outfit_selections[cat] = item.get("item_id")
+                                st.rerun()
+                else:
+                    st.info("All categories already have an item in the outfit, or your wardrobe is empty.")
+            
             # Outfit name and details for saving
             st.markdown("#### Save This Outfit")
             outfit_name = st.text_input("Outfit Name", placeholder="e.g., Casual Friday, Date Night, Work Meeting", key="outfit_name")
             save_col1, save_col2 = st.columns(2)
+            
+            # Get the occasion/season used to generate (default to first option if not set)
+            occasion_options = ["Casual", "Formal", "Business", "Party", "Everyday"]
+            season_options = ["Spring", "Summer", "Fall", "Winter", "All-Season"]
+            
+            # Use the generation values as defaults
+            default_occasion = st.session_state.get("gen_occasion", "Casual")
+            default_season = st.session_state.get("gen_season", "Spring")
+            
+            occasion_idx = occasion_options.index(default_occasion) if default_occasion in occasion_options else 0
+            season_idx = season_options.index(default_season) if default_season in season_options else 0
+            
             with save_col1:
-                save_occasion = st.selectbox("Occasion", ["Casual", "Formal", "Business", "Party", "Everyday"], key="save_occasion")
+                save_occasion = st.selectbox("Occasion", occasion_options, index=occasion_idx, key="save_occasion")
             with save_col2:
-                save_season = st.selectbox("Season", ["Spring", "Summer", "Fall", "Winter", "All-Season"], key="save_season")
+                save_season = st.selectbox("Season", season_options, index=season_idx, key="save_season")
             
             if st.button("Save Outfit", use_container_width=True, type="primary"):
                 try:
@@ -1821,6 +1874,55 @@ elif page == "Saved Outfits":
         else:
             st.warning("No items remaining. Add at least one item to save.")
         
+        # Add from Wardrobe section
+        with st.expander("Add from Wardrobe", expanded=False):
+            st.caption("Select an item to add to this outfit")
+            
+            # Get categories already in outfit
+            categories_in_outfit = set(
+                item.get("category") for item in current_items 
+                if item.get("item_id") in items_to_keep
+            )
+            
+            # Filter to show items not already in outfit
+            available_items = [
+                item for item in st.session_state.uploaded_items 
+                if item.get("item_id") not in items_to_keep
+            ]
+            
+            if available_items:
+                # Group by category
+                categories = sorted(set(item.get("category", "Other") for item in available_items))
+                selected_cat_filter = st.selectbox("Filter by Category", ["All"] + categories, key=f"edit_add_cat_filter_{outfit_id}")
+                
+                if selected_cat_filter != "All":
+                    available_items = [item for item in available_items if item.get("category") == selected_cat_filter]
+                
+                # Display items in grid
+                if available_items:
+                    add_cols = st.columns(4)
+                    for idx, wardrobe_item in enumerate(available_items):
+                        with add_cols[idx % 4]:
+                            # Get image
+                            w_img_src = ""
+                            if wardrobe_item.get("image_base64"):
+                                w_img_src = f"data:image/jpeg;base64,{wardrobe_item.get('image_base64')}"
+                            elif wardrobe_item.get("image_url") and not str(wardrobe_item.get("image_url", "")).startswith("s3://"):
+                                w_img_src = wardrobe_item.get("image_url")
+                            
+                            if w_img_src:
+                                st.image(w_img_src, use_container_width=True)
+                            st.caption(f"{wardrobe_item.get('category', '')} - {wardrobe_item.get('subcategory', '') or wardrobe_item.get('brand', '')}")
+                            
+                            if st.button("Add", key=f"edit_add_item_{outfit_id}_{wardrobe_item.get('item_id')}", use_container_width=True, type="primary"):
+                                # Add item to the outfit
+                                st.session_state[f"edit_items_{outfit_id}"].append(wardrobe_item.get("item_id"))
+                                # Also add to current_items for display
+                                current_items.append(wardrobe_item)
+                                st.rerun()
+            else:
+                st.info("All your wardrobe items are already in this outfit.")
+        
         st.markdown("---")
         
         # Save and Cancel buttons
@@ -1861,7 +1963,32 @@ elif page == "Saved Outfits":
         if len(saved_outfits) == 0:
             st.info("You haven't saved any outfits yet. Go to Outfit Builder to create one!")
         else:
-            for i, outfit in enumerate(saved_outfits):
+            # Filter dropdowns for occasion and season
+            filter_col1, filter_col2 = st.columns(2)
+            with filter_col1:
+                occasion_filter = st.selectbox(
+                    "Filter by Occasion",
+                    ["All Occasions", "Casual", "Formal", "Business", "Party", "Everyday"],
+                    key="saved_outfit_occasion_filter"
+                )
+            with filter_col2:
+                season_filter = st.selectbox(
+                    "Filter by Season",
+                    ["All Seasons", "Spring", "Summer", "Fall", "Winter", "All-Season"],
+                    key="saved_outfit_season_filter"
+                )
+            
+            # Apply filters
+            filtered_outfits = saved_outfits
+            if occasion_filter != "All Occasions":
+                filtered_outfits = [o for o in filtered_outfits if o.get("occasion") == occasion_filter]
+            if season_filter != "All Seasons":
+                filtered_outfits = [o for o in filtered_outfits if o.get("season") == season_filter]
+            
+            if not filtered_outfits:
+                st.info(f"No outfits match the selected filters.")
+            
+            for i, outfit in enumerate(filtered_outfits):
                 outfit_id = outfit.get("outfit_id", f"outfit_{i}")
                 outfit_name = outfit.get('name') or f"Outfit {i+1}"
                 
@@ -1959,7 +2086,7 @@ elif page == "Saved Outfits":
                             "occasion": outfit.get('occasion'),
                             "season": outfit.get('season')
                         }
-                        st.success("Feedback saved! 💜")
+                        st.success("Feedback saved!")
                         st.rerun()
                     
                     # Display existing feedback
