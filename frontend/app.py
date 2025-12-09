@@ -1059,7 +1059,7 @@ def get_cached_wardrobe_items():
         raise Exception(f"Failed to fetch wardrobe items: {str(e)}")
 
 # --- Sidebar ---
-st.sidebar.image("logo.png")
+st.sidebar.image("frontend/logo.png")
 st.sidebar.title("Generate outfits from your wardrobe.")
 #st.sidebar.write("Your digital stylist")
 
