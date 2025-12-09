@@ -1,5 +1,7 @@
 # DSAN6700 - Fashion Recommendation System
 
+Team: Courtney Green, Li-Wen Hu, Satomi Ito, Nandini Kodali, Sophia Rutman
+
 A fashion recommendation system that helps users style their own clothing or build new outfits from an uploaded image. The system combines computer vision (ResNet-50 embeddings) with efficient similarity search and recommendation algorithms.
 
 ## Project Structure
