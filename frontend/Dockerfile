@@ -16,6 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy Source Code
 COPY . /app/
+COPY logo.png .
+COPY horizontal_logo.png .
+
 
 # Expose Port
 EXPOSE 8501
