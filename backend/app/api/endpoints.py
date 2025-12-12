@@ -33,9 +33,7 @@ router = APIRouter()
 recommender = OutfitRecommender()
 
 
-# -----------------------------
 # Utility: Read image once
-# -----------------------------
 async def read_image_bytes(file: UploadFile) -> bytes:
     contents = await file.read()
     if not contents:
@@ -50,9 +48,7 @@ def load_pil_image(contents: bytes) -> Image.Image:
         raise HTTPException(status_code=400, detail="Invalid image file.")
 
 
-# -----------------------------
 # Request Models
-# -----------------------------
 class OutfitRequest(BaseModel):
     occasion: str
     season: str
@@ -74,10 +70,12 @@ class UpdateWardrobeItemRequest(BaseModel):
     occasions: List[str] = []
     notes: str = ""
 
+class RateOutfitRequest(BaseModel):
+    rating: int
+    notes: Optional[str] = ""
 
-# -----------------------------
+
 # Upload Wardrobe Item
-# -----------------------------
 @router.post("/wardrobe/upload")
 async def upload_wardrobe_item(
     category: str,
@@ -88,9 +86,7 @@ async def upload_wardrobe_item(
     logger.info(f"[{request_id}] Upload started: category={category}, filename={file.filename}")
 
     try:
-        # --------------------------------------------------------
         # Read UploadFile contents
-        # --------------------------------------------------------
         t0 = time.time()
         contents = await file.read()
         logger.info(f"[{request_id}] Step1: read file ({len(contents)} bytes) in {time.time() - t0:.3f}s")
@@ -98,9 +94,7 @@ async def upload_wardrobe_item(
         if not contents:
             raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-        # --------------------------------------------------------
         # Upload to S3
-        # --------------------------------------------------------
         t1 = time.time()
         s3_key = f"wardrobe/{uuid4()}/{file.filename}"
 
@@ -114,9 +108,7 @@ async def upload_wardrobe_item(
         )
         logger.info(f"[{request_id}] Step2: S3 upload completed in {time.time() - t1:.3f}s")
 
-        # --------------------------------------------------------
         # Insert wardrobe row (db is a CONNECTION now)
-        # --------------------------------------------------------
         t2 = time.time()
         item_id = await db.fetchval(
             """
@@ -128,17 +120,13 @@ async def upload_wardrobe_item(
         )
         logger.info(f"[{request_id}] Step3: DB insert wardrobe → item_id={item_id} ({time.time() - t2:.3f}s)")
 
-        # --------------------------------------------------------
         # Compute embedding
-        # --------------------------------------------------------
         t3 = time.time()
         image = Image.open(io.BytesIO(contents)).convert("RGB")
         vector = compute_embedding(image).tolist()
         logger.info(f"[{request_id}] Step4: embedding computed ({time.time() - t3:.3f}s)")
 
-        # --------------------------------------------------------
         # Insert embedding row
-        # --------------------------------------------------------
         t4 = time.time()
         await db.execute(
             """
@@ -163,9 +151,7 @@ async def upload_wardrobe_item(
         raise HTTPException(status_code=500, detail=f"Wardrobe upload failed: {str(e)}")
 
 
-# -----------------------------
 # Get All Wardrobe Items
-# -----------------------------
 @router.get("/wardrobe/items")
 async def get_wardrobe_items(db=Depends(get_db)):
     # Fetch all wardrobe items from database
@@ -218,9 +204,7 @@ async def get_wardrobe_items(db=Depends(get_db)):
     return {"items": response}
 
 
-# -----------------------------
 # Predict + Similar Items
-# -----------------------------
 @router.post("/predict")
 async def predict_image(
     file: UploadFile = File(...),
@@ -266,9 +250,7 @@ async def predict_image(
         )
 
 
-# -----------------------------
 # Generate Outfits
-# -----------------------------
 @router.post("/outfits/generate")
 async def generate_outfits(req: OutfitRequest, db=Depends(get_db)):
     outfits = await recommender.recommend_outfits(req.occasion, req.season, db)
@@ -280,9 +262,7 @@ async def generate_outfits(req: OutfitRequest, db=Depends(get_db)):
     }
 
 
-# -----------------------------
 # Save Outfit
-# -----------------------------
 @router.post("/outfits/save")
 async def save_outfit(req: SaveOutfitRequest, db=Depends(get_db)):
     try:
@@ -306,9 +286,7 @@ async def save_outfit(req: SaveOutfitRequest, db=Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Save outfit failed: {str(e)}")
 
 
-# -----------------------------
 # Get Saved Outfits
-# -----------------------------
 @router.get("/outfits/saved")
 async def get_saved_outfits(db=Depends(get_db)):
 
@@ -366,9 +344,7 @@ async def get_saved_outfits(db=Depends(get_db)):
     return {"saved_outfits": response}
 
 
-# -----------------------------
 # Delete Saved Outfit
-# -----------------------------
 @router.delete("/outfits/{outfit_id}")
 async def delete_outfit(outfit_id: str, db=Depends(get_db)):
     try:
@@ -378,9 +354,7 @@ async def delete_outfit(outfit_id: str, db=Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Delete outfit failed: {str(e)}")
 
 
-# -----------------------------
 # Update Saved Outfit
-# -----------------------------
 class UpdateOutfitRequest(BaseModel):
     name: Optional[str] = None
     occasion: Optional[str] = None
@@ -429,9 +403,7 @@ async def update_outfit(outfit_id: str, req: UpdateOutfitRequest, db=Depends(get
         raise HTTPException(status_code=500, detail=f"Update outfit failed: {str(e)}")
 
 
-# -----------------------------
 # Delete Wardrobe Item
-# -----------------------------
 @router.delete("/wardrobe/item/{item_id}")
 async def delete_wardrobe_item(item_id: int, db=Depends(get_db)):
     try:
@@ -444,9 +416,7 @@ async def delete_wardrobe_item(item_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 
-# -----------------------------
 # Update Wardrobe Item
-# -----------------------------
 @router.patch("/wardrobe/item/{item_id}")
 async def update_wardrobe_item(item_id: int, req: UpdateWardrobeItemRequest, db=Depends(get_db)):
     try:
@@ -477,9 +447,7 @@ async def update_wardrobe_item(item_id: int, req: UpdateWardrobeItemRequest, db=
         raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
 
 
-# -----------------------------
 # Clear All Wardrobe Items (for testing)
-# -----------------------------
 @router.delete("/wardrobe/clear-all")
 async def clear_all_wardrobe_items(db=Depends(get_db)):
     try:
@@ -492,9 +460,7 @@ async def clear_all_wardrobe_items(db=Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Clear failed: {str(e)}")
 
 
-# -----------------------------
 # Upload Document
-# -----------------------------
 @router.post("/documents/upload", status_code=201)
 async def upload_document(file: UploadFile = File(...), db=Depends(get_db)):
     try:
@@ -529,3 +495,72 @@ async def upload_document(file: UploadFile = File(...), db=Depends(get_db)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@router.post("/outfits/{outfit_id}/rate")
+async def rate_outfit(outfit_id: str, req: RateOutfitRequest, db=Depends(get_db)):
+    """
+    Add a rating (1–5) + notes to a saved outfit.
+    """
+    # Validate rating
+    if req.rating < 1 or req.rating > 5:
+        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5.")
+
+    rating_id = str(uuid4())
+
+    try:
+        await db.execute(
+            """
+            INSERT INTO outfit_ratings (rating_id, outfit_id, rating, notes)
+            VALUES ($1, $2, $3, $4)
+            """,
+            rating_id,
+            outfit_id,
+            req.rating,
+            req.notes,
+        )
+
+        return {
+            "status": "success",
+            "rating_id": rating_id,
+            "outfit_id": outfit_id,
+            "rating": req.rating,
+            "notes": req.notes,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to add rating: {str(e)}"
+        )
+
+@router.get("/outfits/{outfit_id}/ratings")
+async def get_outfit_ratings(outfit_id: str, db=Depends(get_db)):
+    try:
+        rows = await db.fetch(
+            """
+            SELECT rating_id, rating, notes, created_at
+            FROM outfit_ratings
+            WHERE outfit_id = $1
+            ORDER BY created_at DESC
+            """,
+            outfit_id
+        )
+
+        return {
+            "outfit_id": outfit_id,
+            "ratings": [
+                {
+                    "rating_id": r["rating_id"],
+                    "rating": r["rating"],
+                    "notes": r["notes"],
+                    "created_at": r["created_at"].isoformat() if r["created_at"] else None
+                }
+                for r in rows
+            ]
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch outfit ratings: {str(e)}"
+        )
